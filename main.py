@@ -3,6 +3,7 @@
 import os
 import openai
 import PyPDF2
+import tiktoken
 import json
 from typing import List
 from dotenv import load_dotenv
@@ -32,40 +33,52 @@ def generate_text(system_prompt: str, message: str) -> str:
     )
     return response.choices[0].message.content
 
+def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
+    encoding = tiktoken.encoding_for_model(model)
+    tokens = encoding.encode(text)
+    return len(tokens)
+
 def open_text_file(file_path: str) -> str:
     with open(file_path, 'r') as file:
         content = file.read()
     return content
 
-def chunk_document(document_text: str) -> List:
-    words = document_text.split()
+def find_section(document_text: str) -> List:
+    relevant_keywords = ["commercial paper", "short-term borrowings", "debt", "liquidity", "cash equivalents"]
 
-    output = []
-    chunk = []
-    for w in words:
-        chunk.append(w)
-        if len(chunk) >= 3500:
-            output.append(" ".join(chunk))
+    sections = document_text.split("\n")
+
+    relevant_sections = []
+    for section in sections:
+        if any(keyword.lower() in section.lower() for keyword in relevant_keywords):
+            relevant_sections.append(section)
     
-    return output
+    return relevant_sections
 
 def extract_information(system_prompt: str, document: str) -> dict:
-    response = generate_text(system_prompt, document)
-    parsed_response = json.loads(response)
-    return parsed_response
+    try:
+        response = generate_text(system_prompt, document)
+        parsed_response = json.loads(response)
+        return parsed_response
+    except:
+        return {"commercial_debt": 0, "commentary": "No commercial paper program or commercial paper debt was mentioned in the provided 10K excerpt."}
 
 def main():
     document_text = extract_text_from_pdf('./input.pdf')
     system_prompt = open_text_file('prompt.txt')
-    document_chunks = chunk_document(document_text)
+    document_chunks = find_section(document_text)
 
+    references = []
     print(f'\nStarting extraction for {len(document_chunks)}...')
     for idx, chunk in enumerate(document_chunks):
         print(f'Extracting information for chunk {idx}...')
         commercial_paper = extract_information(chunk, system_prompt)
         if commercial_paper["commercial_debt"] != 0:
-            return commercial_paper
-        return {"commercial_debt": 0, "commentary": "No commercial paper program or commercial paper debt was mentioned in the provided 10K excerpt."}
+            print(f'Found match in chunk {idx}... with output: \n')
+            print(json.dumps(commercial_paper, indent=4))
+            references.append(commercial_paper)
+        
+    return references
         
 if __name__ == "__main__":
-    print(main())
+    main()
