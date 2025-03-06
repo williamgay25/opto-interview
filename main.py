@@ -1,4 +1,4 @@
-# pip install 
+# pip install -r requirements.txt
 
 import os
 import openai
@@ -8,9 +8,6 @@ from typing import List
 from dotenv import load_dotenv
 
 load_dotenv()
-
-api_key = os.getenv('API_KEY')
-openai.api_key = api_key
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     with open(pdf_path, 'rb') as file:
@@ -23,13 +20,16 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     return text
 
 def generate_text(system_prompt: str, message: str) -> str:
-    response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ]
-        )
+    client = openai.OpenAI(
+        api_key=os.getenv('API_KEY'),
+    )
+    response = client.chat.completions.create(
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message}
+        ],
+        model="gpt-3.5-turbo",
+    )
     return response.choices[0].message.content
 
 def open_text_file(file_path: str) -> str:
@@ -49,31 +49,23 @@ def chunk_document(document_text: str) -> List:
     
     return output
 
-""" 
-NOTE: Naively returns the first instance of commercial paper that is found...
-A more thorough approach would be to retrieve all instances and then check for the most accurate.
-"""
-def extract_information(system_prompt: str, documents: str) -> dict:
-    output = []
-    for doc in documents:
-        #response = generate_text(system_prompt, doc)
+def extract_information(system_prompt: str, document: str) -> dict:
+    response = generate_text(system_prompt, document)
+    parsed_response = json.loads(response)
+    return parsed_response
 
-        # NOTE: This is just for testing purposes 
-        response = '```json\n{\n    "commercial_debt": 0,\n    "commentary": "No commercial paper program or commercial paper debt was mentioned in the provided 10K excerpt."\n}\n```'
-
-        output.append(response)
-
-        parsed_response = json.loads(response)
-
-        if parsed_response["commercial_debt"] != 0:
-            return parsed_response
-
-    return {"commercial_debt": 0, "commentary": "No commercial paper program or commercial paper debt was mentioned in the provided 10K excerpt."}
-
-if __name__ == "__main__":
+def main():
     document_text = extract_text_from_pdf('./input.pdf')
     system_prompt = open_text_file('prompt.txt')
     document_chunks = chunk_document(document_text)
 
-    for chunk in document_chunks:
+    print(f'\nStarting extraction for {len(document_chunks)}...')
+    for idx, chunk in enumerate(document_chunks):
+        print(f'Extracting information for chunk {idx}...')
         commercial_paper = extract_information(chunk, system_prompt)
+        if commercial_paper["commercial_debt"] != 0:
+            return commercial_paper
+        return {"commercial_debt": 0, "commentary": "No commercial paper program or commercial paper debt was mentioned in the provided 10K excerpt."}
+        
+if __name__ == "__main__":
+    print(main())
