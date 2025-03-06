@@ -62,7 +62,7 @@ def chunk_document(input_document: str, max_tokens: int = 3000) -> List:
 
     return chunks
 
-def find_relevant_chunks(chunks, keywords=["commercial paper"]):
+def find_relevant_chunks(chunks: List, keywords: List=["commercial paper"]) -> List:
     relevant_chunks = []
     for chunk in chunks:
         if all(keyword.lower() in chunk.lower() for keyword in keywords):
@@ -72,6 +72,8 @@ def find_relevant_chunks(chunks, keywords=["commercial paper"]):
 def run_agent(document_text: str, max_tokens: int, keywords: List, system_prompt: str):
     raw_chunks = chunk_document(document_text, max_tokens=max_tokens)
     relevant_chunks = find_relevant_chunks(raw_chunks, keywords=keywords)
+    if not relevant_chunks:
+        raise Exception(f"No relevant chunks found! Update the agent parameters!")
     
     combined_context = "\n\n".join(relevant_chunks)
     context_tokens = count_tokens(combined_context)
